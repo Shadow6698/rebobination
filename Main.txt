@@ -1,0 +1,158 @@
+-- LocalScript dentro de StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+local RunService = game:GetService("RunService")
+
+-- Guarda posições dos passos
+local steps = {}
+local counting = false
+local rebobinando = false
+
+-- GUI menor e compacta
+local ScreenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+ScreenGui.Name = "TimeRewindGui"
+
+local frame = Instance.new("Frame", ScreenGui)
+frame.Size = UDim2.new(0, 180, 0, 100)
+frame.Position = UDim2.new(0, 10, 0, 50)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.AnchorPoint = Vector2.new(0, 0)
+frame.ClipsDescendants = true
+
+local function createButton(text, posY)
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(1, -20, 0, 30)
+    btn.Position = UDim2.new(0, 10, 0, posY)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 18
+    btn.Text = text
+    btn.AutoButtonColor = true
+    btn.BackgroundTransparency = 0.1
+    return btn
+end
+
+local contarBtn = createButton("Contar Passos", 5)
+local rebobinarBtn = createButton("Rebobinar", 40)
+
+local contarPassosLabel = Instance.new("TextLabel", frame)
+contarPassosLabel.Size = UDim2.new(1, -20, 0, 20)
+contarPassosLabel.Position = UDim2.new(0, 10, 0, 75)
+contarPassosLabel.BackgroundTransparency = 1
+contarPassosLabel.TextColor3 = Color3.new(1,1,1)
+contarPassosLabel.Font = Enum.Font.SourceSansBold
+contarPassosLabel.TextSize = 16
+contarPassosLabel.Text = "Passos: 0"
+contarPassosLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Função para atualizar contagem
+local function atualizarContagem()
+    contarPassosLabel.Text = "Passos: "..#steps
+end
+
+-- Detectar movimento e contar passos
+local lastPosition = rootPart.Position
+
+local function startCounting()
+    counting = true
+    steps = {} -- resetar passos
+    lastPosition = rootPart.Position
+    atualizarContagem()
+end
+
+local function stopCounting()
+    counting = false
+end
+
+-- Rebobinar rápido, iterando todas as posições numa velocidade ajustada
+local function rebobinar()
+    if rebobinando or #steps == 0 then return end
+    rebobinando = true
+    
+    -- Vai rebobinar do último passo para o primeiro, com intervalos pequenos
+    for i = #steps, 1, -1 do
+        rootPart.CFrame = CFrame.new(steps[i])
+        -- Intervalo curto para rebobinar rápido
+        wait(0.05)
+    end
+    
+    rebobinando = false
+end
+
+contarBtn.MouseButton1Click:Connect(function()
+    if counting then
+        stopCounting()
+        contarBtn.Text = "Contar Passos"
+    else
+        startCounting()
+        contarBtn.Text = "Parar Contagem"
+    end
+end)
+
+rebobinarBtn.MouseButton1Click:Connect(function()
+    if counting then
+        stopCounting()
+        contarBtn.Text = "Contar Passos"
+    end
+    rebobinar()
+end)
+
+RunService.Heartbeat:Connect(function()
+    if counting then
+        local currentPos = rootPart.Position
+        if (currentPos - lastPosition).magnitude > 1 then -- registra a cada ~1 stud
+            table.insert(steps, currentPos)
+            lastPosition = currentPos
+            atualizarContagem()
+        end
+    end
+end)
+
+--[[ Código para mover o GUI (funciona no mobile e PC) ]]--
+
+local UserInputService = game:GetService("UserInputService")
+
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    local newX = math.clamp(startPos.X.Offset + delta.X, 0, workspace.CurrentCamera.ViewportSize.X - frame.AbsoluteSize.X)
+    local newY = math.clamp(startPos.Y.Offset + delta.Y, 0, workspace.CurrentCamera.ViewportSize.Y - frame.AbsoluteSize.Y)
+    frame.Position = UDim2.new(0, newX, 0, newY)
+end
+
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
